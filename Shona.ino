@@ -2,8 +2,8 @@
 #include <EEPROM.h>
 #include <ArduinoJson.h>
 
-const char* ssid = "Coronavirus";
-const char* password = "BastaMartina2020";
+const char* ssid = "";
+const char* password = "";
 
 IPAddress ip(192, 168, 1, 141);
 IPAddress gateway(192, 168, 1, 1);
