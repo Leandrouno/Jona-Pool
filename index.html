@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Compuerta</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .container {
+            margin-top: 50px;
+        }
+        #respuesta {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .json-item {
+            margin-bottom: 8px;
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+        }
+        .json-key {
+            font-weight: bold;
+            min-width: 120px; /* Ajusta según sea necesario */
+            margin-right: 10px;
+        }
+        .json-value {
+            flex-grow: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container text-center">
+        <h1>Control de Compuerta</h1>
+
+        <div class="mt-3">
+            <button class="btn btn-success btn-lg me-2" onclick="enviarComando(10)">Abrir 10 "</button>
+            <button class="btn btn-warning btn-lg me-2" onclick="enviarComando(30)">Abrir 30 "</button>
+            <button class="btn btn-primary btn-lg me-2" onclick="enviarComando(60)">Abrir 1 Hora</button>
+            <button class="btn btn-danger btn-lg me-2" onclick="cerrarCompuerta()">Cerrar</button>
+            <button class="btn btn-info btn-lg" onclick="obtenerEstado()">Estado</button>
+            <button class="btn btn-success btn-lg" onclick="lampara('encender')">Encender Lampara</button>
+            <button class="btn btn-danger btn-lg" onclick="lampara('apagar')">Apagar Lampara</button>
+        </div>
+
+        <div id="respuesta" class="mt-4">
+
+        </div>
+    </div>
+
+    <script>
+        const ipServidor = "http://192.168.1.141";
+        const parametrosBase = "?usuario=Jona&llave=Pool1234";
+        const respuestaDiv = document.getElementById("respuesta");
+
+        function mostrarJSONFormateado(jsonData) {
+            respuestaDiv.innerHTML = ''; // Limpia el contenido anterior
+            for (const key in jsonData) {
+                if (jsonData.hasOwnProperty(key)) {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.classList.add('json-item');
+
+                    const keySpan = document.createElement('span');
+                    keySpan.classList.add('json-key');
+                    keySpan.textContent = key + ':';
+
+                    const valueSpan = document.createElement('span');
+                    valueSpan.classList.add('json-value');
+                    valueSpan.textContent = jsonData[key];
+
+                    itemDiv.appendChild(keySpan);
+                    itemDiv.appendChild(valueSpan);
+                    respuestaDiv.appendChild(itemDiv);
+                }
+            }
+        }
+
+        function manejarRespuesta(response) {
+            response.text()
+                .then(data => {
+                    try {
+                        const jsonData = JSON.parse(data);
+                        mostrarJSONFormateado(jsonData);
+                    } catch (e) {
+                        respuestaDiv.textContent = data; // Si no es JSON, muestra la respuesta tal cual
+                    }
+                })
+                .catch(error => {
+                    respuestaDiv.textContent = `Error al comunicarse con el dispositivo: ${error}`;
+                });
+        }
+
+        function enviarComando(tiempo) {
+            const url = `${ipServidor}/abrir${parametrosBase}&tiempo=${tiempo}`;
+            fetch(url).then(manejarRespuesta);
+        }
+
+        function obtenerEstado() {
+            const url = `${ipServidor}/estado${parametrosBase}`;
+            fetch(url).then(manejarRespuesta);
+        }
+
+        function lampara(estado) {
+            const url = `${ipServidor}/lampara=${estado}${parametrosBase}`;
+            fetch(url).then(manejarRespuesta);
+        }
+
+        function cerrarCompuerta() {
+            const url = `${ipServidor}/cerrar${parametrosBase}`;
+            fetch(url).then(manejarRespuesta);
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
