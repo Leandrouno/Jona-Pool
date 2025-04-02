@@ -5,9 +5,9 @@
 const char* ssid = "";
 const char* password = "";
 
-IPAddress ip(192, 168, 1, 141);
-IPAddress gateway(192, 168, 1, 1);
-IPAddress subnet(255, 255, 0, 0);
+IPAddress ip(192, 168, 0, 13);
+IPAddress gateway(192, 168, 0, 1);
+IPAddress subnet(255, 255, 255, 0);
 
 int paso[4][4] = {
   {1, 1, 0, 0},
