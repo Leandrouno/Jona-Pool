@@ -178,35 +178,6 @@ bool verificarCredenciales(String request) {
   return request.indexOf("usuario=Jona") != -1 && request.indexOf("llave=Pool1234") != -1;
 }
 
-void moverMotorViejo(bool abrir) {
-
-  if ((abrir && posicion == 1) || (!abrir && posicion == 0)) return;
-  pasosMotor++;
-  for (int i = 0; i < 180; i++) {
-
-    if (!abrir && digitalRead(FIN_CARRERA) == LOW) {
-      Serial.println("Final de carrera activado, deteniendo motor.");
-      break;
-    }
-
-    for (int j = 0; j < 4; j++) {
-      digitalWrite(IN1, abrir ? paso[j][0] : paso[3 - j][0]);
-      digitalWrite(IN2, abrir ? paso[j][1] : paso[3 - j][1]);
-      digitalWrite(IN3, abrir ? paso[j][2] : paso[3 - j][2]);
-      digitalWrite(IN4, abrir ? paso[j][3] : paso[3 - j][3]);
-      delay(2);
-    }
-    pasosMotor++;
-  }
-  digitalWrite(IN1, LOW);
-  digitalWrite(IN2, LOW);
-  digitalWrite(IN3, LOW);
-  digitalWrite(IN4, LOW);
-  posicion = abrir ? 1 : 0;
-  EEPROM.write(0, posicion);
-  EEPROM.commit();
-}
-
 void moverMotor(bool abrir) {
   if (abrir) {
 
