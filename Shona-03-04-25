@@ -9,6 +9,7 @@ IPAddress ip(192, 168, 0, 13);
 IPAddress gateway(192, 168, 0, 1);
 IPAddress subnet(255, 255, 255, 0);
 
+
 int paso[4][4] = {
   { 1, 1, 0, 0 },
   { 0, 1, 1, 0 },
@@ -180,7 +181,7 @@ bool verificarCredenciales(String request) {
 
 void moverMotor(bool abrir) {
   if (abrir) {
-
+    digitalWrite(lamparaPin, HIGH);
     for (int i = 0; i < 180; i++) {
       for (int j = 0; j < 4; j++) {
         digitalWrite(IN1, paso[j][0]);
@@ -192,7 +193,7 @@ void moverMotor(bool abrir) {
     }
     posicion = 1;
   } else {
-
+    digitalWrite(lamparaPin, LOW);
     while (digitalRead(FIN_CARRERA) == HIGH) {
       for (int j = 3; j >= 0; j--) {
         digitalWrite(IN1, paso[j][0]);
@@ -211,5 +212,6 @@ void moverMotor(bool abrir) {
   EEPROM.write(0, posicion);
   EEPROM.commit();
 }
+
 
 
