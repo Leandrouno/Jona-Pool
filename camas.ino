@@ -43,7 +43,7 @@ void configurar() {
   pantalla.print("Bienvenido");
 
   WiFiManager gestorWiFi;
-  gestorWiFi.autoConnect("Configuracion-Camas");
+  gestorWiFi.autoConnect("Configuracion-Camas1");
 
   servidorWeb.on("/", manejarRaiz);
   servidorWeb.on("/iniciar", manejarInicio);
