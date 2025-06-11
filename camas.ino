@@ -1,3 +1,9 @@
+/*
+ * Control de Camas de Bronceado con ESP8266
+ * Funciones: Servidor Web con login, control de relés, buzzer, LCD I2C y botón físico
+ * Configuración WiFi desde navegador (WiFiManager)
+ */
+
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <LiquidCrystal_I2C.h>
@@ -11,6 +17,7 @@ ESP8266WebServer servidorWeb(80);
 const int pinReleBronceado = D1;
 const int pinReleEnfriado = D2;
 const int pinBuzzer = D3;
+const int pinBoton = D5; // Botón físico
 
 unsigned long tiempoInicio = 0;
 unsigned long duracionBronceado = 0;
@@ -18,12 +25,14 @@ unsigned long duracionTotal = 0;
 bool estaEnProceso = false;
 bool estaBronceando = false;
 bool estaEnfriando = false;
+bool listoParaIniciar = false;
 
 void configurar() {
   Serial.begin(115200);
   pinMode(pinReleBronceado, OUTPUT);
   pinMode(pinReleEnfriado, OUTPUT);
   pinMode(pinBuzzer, OUTPUT);
+  pinMode(pinBoton, INPUT_PULLUP);
   digitalWrite(pinReleBronceado, LOW);
   digitalWrite(pinReleEnfriado, LOW);
   digitalWrite(pinBuzzer, LOW);
@@ -46,6 +55,15 @@ void configurar() {
 
 void bucle() {
   servidorWeb.handleClient();
+
+  if (listoParaIniciar && digitalRead(pinBoton) == LOW) {
+    tiempoInicio = millis();
+    estaEnProceso = true;
+    estaBronceando = false;
+    estaEnfriando = false;
+    listoParaIniciar = false;
+    pantalla.clear();
+  }
 
   if (estaEnProceso) {
     unsigned long tiempoTranscurrido = millis() - tiempoInicio;
@@ -124,6 +142,7 @@ void manejarRaiz() {
     }
   </script>
   <h1>Control de Camas</h1>
+  <p>Luego de elegir el tiempo, presiona el botón físico para iniciar.</p>
   <button class="btn" onclick="iniciar(10)">10 Min</button>
   <button class="btn" onclick="iniciar(15)">15 Min</button>
   <button class="btn" onclick="iniciar(20)">20 Min</button>
@@ -143,11 +162,12 @@ void manejarInicio() {
     if (minutos > 0) {
       duracionBronceado = minutos * 60 * 1000;
       duracionTotal = duracionBronceado + 60000; // +1 minuto de enfriamiento
-      tiempoInicio = millis();
-      estaEnProceso = true;
-      estaBronceando = false;
-      estaEnfriando = false;
+      listoParaIniciar = true;
       pantalla.clear();
+      pantalla.setCursor(0, 0);
+      pantalla.print("Listo para iniciar");
+      pantalla.setCursor(0, 1);
+      pantalla.print("Presione boton...");
     }
   }
   servidorWeb.send(200, "text/plain", "OK");
