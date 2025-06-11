@@ -1,198 +1,199 @@
+/*
+ * Control de Camas de Bronceado con ESP8266
+ * Funciones: Servidor Web con login, control de relés, buzzer, LCD I2C y botón físico
+ * Configuración WiFi desde navegador (WiFiManager)
+ */
+
 #include <ESP8266WiFi.h>
-#include <EEPROM.h>
-#include <ArduinoJson.h>
+#include <ESP8266WebServer.h>
+#include <LiquidCrystal_I2C.h>
+#include <WiFiManager.h>
+#include <Wire.h>
 
-const char* ssid = "";
-const char* password = "";
+LiquidCrystal_I2C pantalla(0x27, 16, 2); // Dirección común para LCD I2C
+ESP8266WebServer servidorWeb(80);
 
-IPAddress ip(192, 168, 0, 13);
-IPAddress gateway(192, 168, 0, 1);
-IPAddress subnet(255, 255, 255, 0);
+// Pines
+const int pinReleBronceado = D1;
+const int pinReleEnfriado = D2;
+const int pinBuzzer = D3;
+const int pinBoton = D5; // Botón físico
 
-int paso[4][4] = {
-  {1, 1, 0, 0},
-  {0, 1, 1, 0},
-  {0, 0, 1, 1},
-  {1, 0, 0, 1}
-};
+unsigned long tiempoInicio = 0;
+unsigned long duracionBronceado = 0;
+unsigned long duracionTotal = 0;
+bool estaEnProceso = false;
+bool estaBronceando = false;
+bool estaEnfriando = false;
+bool listoParaIniciar = false;
 
-int IN1 = D1, IN2 = D2, IN3 = D3, IN4 = D4;
-int lamparaPin = D8;
-WiFiServer server(80);
-int posicion = 0;
-unsigned long tiempoApertura = 0;
-int tiempoSolicitud = 0;
-int pasosMotor = 0;
+void configurar() {
+  Serial.begin(115200);
+  Serial.println("Iniciando configuración del sistema...");
 
-#define EEPROM_SIZE 512 
+  pinMode(pinReleBronceado, OUTPUT);
+  pinMode(pinReleEnfriado, OUTPUT);
+  pinMode(pinBuzzer, OUTPUT);
+  pinMode(pinBoton, INPUT_PULLUP);
+
+  digitalWrite(pinReleBronceado, LOW);
+  digitalWrite(pinReleEnfriado, LOW);
+  digitalWrite(pinBuzzer, LOW);
+
+  Wire.begin(D2, D1); // Inicializar bus I2C manualmente
+  pantalla.begin(16, 2);  // 16 columnas, 2 filas
+  pantalla.backlight();
+  pantalla.setCursor(0, 0);
+  pantalla.print("Bienvenido");
+
+  Serial.println("Esperando configuración WiFi...");
+  WiFiManager gestorWiFi;
+  gestorWiFi.autoConnect("Configuracion-Camas");
+
+  Serial.print("Conectado a red WiFi. IP asignada: ");
+  Serial.println(WiFi.localIP());
+
+  servidorWeb.on("/", manejarRaiz);
+  servidorWeb.on("/iniciar", manejarInicio);
+  servidorWeb.begin();
+
+  Serial.println("Servidor web iniciado correctamente.");
+}
+
+
+void bucle() {
+  servidorWeb.handleClient();
+
+  if (listoParaIniciar && digitalRead(pinBoton) == LOW) {
+    Serial.println("Botón físico presionado. Iniciando proceso...");
+    tiempoInicio = millis();
+    estaEnProceso = true;
+    estaBronceando = false;
+    estaEnfriando = false;
+    listoParaIniciar = false;
+    pantalla.clear();
+  }
+
+  if (estaEnProceso) {
+    unsigned long tiempoTranscurrido = millis() - tiempoInicio;
+    unsigned long segundosRestantes = (duracionTotal - tiempoTranscurrido) / 1000;
+
+    if (tiempoTranscurrido < 15000) {
+      pantalla.setCursor(0, 0);
+      pantalla.print("Inicia en: ");
+      pantalla.print((15 - tiempoTranscurrido / 1000));
+      pantalla.print("s     ");
+    } else {
+      if (!estaBronceando && !estaEnfriando) {
+        estaBronceando = true;
+        Serial.println("Activando relés: Bronceado y Enfriado");
+        digitalWrite(pinReleBronceado, HIGH);
+        digitalWrite(pinReleEnfriado, HIGH);
+      }
+
+      if (estaBronceando && tiempoTranscurrido > duracionBronceado + 15000) {
+        estaBronceando = false;
+        estaEnfriando = true;
+        Serial.println("Finaliza bronceado. Solo enfriando.");
+        digitalWrite(pinReleBronceado, LOW);
+      }
+
+      if (estaEnfriando && tiempoTranscurrido > duracionTotal) {
+        estaEnfriando = false;
+        estaEnProceso = false;
+        digitalWrite(pinReleEnfriado, LOW);
+        digitalWrite(pinBuzzer, LOW);
+        pantalla.clear();
+        pantalla.setCursor(0, 0);
+        pantalla.print("Bienvenido");
+        Serial.println("Proceso finalizado. Relés y buzzer apagados.");
+      } else {
+        pantalla.setCursor(0, 0);
+        pantalla.print(segundosRestantes);
+        pantalla.print(" seg     ");
+
+        pantalla.setCursor(0, 1);
+        pantalla.print(estaBronceando ? "Bronceando     " : "Enfriando      ");
+
+        if (segundosRestantes <= 15) {
+          digitalWrite(pinBuzzer, millis() / 300 % 2);
+        }
+      }
+    }
+  }
+}
 
 void setup() {
-    EEPROM.begin(EEPROM_SIZE);
-    posicion = EEPROM.read(0);
-    pinMode(IN1, OUTPUT);
-    pinMode(IN2, OUTPUT);
-    pinMode(IN3, OUTPUT);
-    pinMode(IN4, OUTPUT);
-    pinMode(lamparaPin, OUTPUT);
-    digitalWrite(lamparaPin, LOW);
-    
-    Serial.begin(115200);
-    delay(10);
-
-    WiFi.mode(WIFI_STA);
-    WiFi.config(ip, gateway, subnet);
-    WiFi.begin(ssid, password);
-
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-    }
-    Serial.println("\nWiFi connected");
-    server.begin();
-    Serial.println("Servidor iniciado");
+  configurar();  // llama a tu función de configuración en español
 }
 
 void loop() {
-    WiFiClient client = server.available();
-    if (!client) {
-        verificarCierreAutomatico();
-        return;
-    }
-    String request = client.readStringUntil('\r');
-    Serial.println("Solicitud: " + request);
-    client.flush();
-
-    if (!verificarCredenciales(request)) {
-        enviarRespuesta(client, "error", "Acceso denegado");
-        return;
-    }
-
-    procesarAccion(request, client);
-    verificarCierreAutomatico();
-}
-
-void procesarAccion(String request, WiFiClient &client) {
-    if (request.indexOf("lampara=") != -1) {
-        bool encender = request.indexOf("lampara=encender") != -1;
-        digitalWrite(lamparaPin, encender ? HIGH : LOW);
-        enviarRespuesta(client, "ok", encender ? "Lámpara Encendida" : "Lámpara Apagada");
-        return;
-    }
-
-    if (request.indexOf("/abrir") != -1) {
-        if (posicion == 1) {
-            int tiempoRestante = (tiempoApertura + (tiempoSolicitud * 1000) - millis()) / 1000;
-            enviarRespuesta(client, "error", ("Compuerta ya abierta, se cerrará en " + String(tiempoRestante) + " segundos").c_str());
-            return;
-        }
-        String tiempoStr = getQueryParam(request, "tiempo");
-        if (tiempoStr == "") {
-            enviarRespuesta(client, "error", "Debe enviar el parametro 'tiempo'");
-            return;
-        }
-        int tiempo = tiempoStr.toInt();
-        if (tiempo <= 0) {
-            enviarRespuesta(client, "error", "El tiempo debe ser mayor a 0");
-            return;
-        }
-        moverMotor(true);
-        enviarRespuesta(client, "ok", "Compuerta abierta");
-        tiempoApertura = millis();
-        tiempoSolicitud = tiempo;
-        return;
-    }
-
-    if (request.indexOf("/cerrar") != -1) {
-        moverMotor(false);
-        enviarRespuesta(client, "ok", "Compuerta cerrada");
-        tiempoApertura = 0;
-        pasosMotor = 0;
-        return;
-    }
-
-    if (request.indexOf("/estado") != -1) {
-        enviarRespuestaEstado(client);
-        return;
-    }
-
-    enviarRespuesta(client, "error", "Parametro inexistente");
-}
-
-void verificarCierreAutomatico() {
-    if (tiempoApertura > 0 && millis() - tiempoApertura >= tiempoSolicitud * 1000) {
-        moverMotor(false);
-        tiempoApertura = 0;
-        pasosMotor = 0;
-    }
-}
-
-void enviarRespuesta(WiFiClient& client, const char* status, const char* mensaje) {
-    StaticJsonDocument<200> json;
-    json["estado"] = status;
-    json["mensaje"] = mensaje;
-    String respuesta;
-    serializeJson(json, respuesta);
-    client.println("HTTP/1.1 200 OK\nContent-Type: application/json\nConnection: close\n");
-    client.println();
-    client.println(respuesta);
-}
-
-void enviarRespuestaEstado(WiFiClient& client) {
-    StaticJsonDocument<200> json;
-    json["estado"] = "ok";
-    json["compuerta"] = posicion == 1 ? "abierta" : "cerrada";
-    json["lampara"] = digitalRead(lamparaPin) == HIGH ? "encendida" : "apagada";
-    json["pasos_motor"] = pasosMotor;
-
-    if (posicion == 1 && tiempoApertura > 0) {
-        int tiempoRestante = (tiempoApertura + (tiempoSolicitud * 1000) - millis()) / 1000;
-        if (tiempoRestante > 0) {
-            json["tiempo_restante"] = tiempoRestante;
-        } else {
-            json["tiempo_restante"] = 0;  // Si el tiempo ya expiró, mostrar 0
-        }
-    }
-
-    String respuesta;
-    serializeJson(json, respuesta);
-    client.println("HTTP/1.1 200 OK\nContent-Type: application/json\nConnection: close\n");
-    client.println();
-    client.println(respuesta);
+  bucle();  // llama a tu función principal de ejecución en español
 }
 
 
-String getQueryParam(String request, String param) {
-    int startIndex = request.indexOf(param + "=");
-    if (startIndex == -1) return "";
-    startIndex += param.length() + 1;
-    int endIndex = request.indexOf("&", startIndex);
-    if (endIndex == -1) endIndex = request.length();
-    return request.substring(startIndex, endIndex);
-}
-
-bool verificarCredenciales(String request) {
-    return request.indexOf("usuario=Jona") != -1 && request.indexOf("llave=Pool1234") != -1;
-}
-
-void moverMotor(bool abrir) {
-  
-    if ((abrir && posicion == 1) || (!abrir && posicion == 0)) return;
-    pasosMotor++;
-    for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < 4; j++) {
-            digitalWrite(IN1, abrir ? paso[j][0] : paso[3 - j][0]);
-            digitalWrite(IN2, abrir ? paso[j][1] : paso[3 - j][1]);
-            digitalWrite(IN3, abrir ? paso[j][2] : paso[3 - j][2]);
-            digitalWrite(IN4, abrir ? paso[j][3] : paso[3 - j][3]);
-            delay(2);
-        }
-         pasosMotor++;
+void manejarRaiz() {
+  Serial.println("Página principal solicitada desde navegador.");
+  servidorWeb.send(200, "text/html", R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Camas Bronceado</title>
+  <style>
+    body { font-family: sans-serif; background: #f3f3f3; text-align: center; padding-top: 50px; }
+    .btn {
+      display: inline-block; margin: 10px; padding: 20px 40px;
+      background: #4CAF50; color: white; font-size: 20px;
+      border: none; border-radius: 10px; cursor: pointer;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-    digitalWrite(IN1, LOW);
-    digitalWrite(IN2, LOW);
-    digitalWrite(IN3, LOW);
-    digitalWrite(IN4, LOW);
-    posicion = abrir ? 1 : 0;
-    EEPROM.write(0, posicion);
-    EEPROM.commit();
+    .btn:hover { background: #45a049; }
+  </style>
+</head>
+<body>
+  <script>
+    if (!localStorage.loginOK) {
+      let usuario = prompt("Usuario:");
+      let contrasena = prompt("Contraseña:");
+      if (usuario !== "camas" || contrasena !== "camas2025") {
+        alert("Acceso denegado");
+        location.reload();
+      } else {
+        localStorage.loginOK = true;
+      }
+    }
+  </script>
+  <h1>Control de Camas</h1>
+  <p>Luego de elegir el tiempo, presiona el botón físico para iniciar.</p>
+  <button class="btn" onclick="iniciar(10)">10 Min</button>
+  <button class="btn" onclick="iniciar(15)">15 Min</button>
+  <button class="btn" onclick="iniciar(20)">20 Min</button>
+  <script>
+    function iniciar(minutos) {
+      fetch(`/iniciar?min=${minutos}`);
+    }
+  </script>
+</body>
+</html>
+  )rawliteral");
+}
+
+void manejarInicio() {
+  if (servidorWeb.hasArg("min")) {
+    int minutos = servidorWeb.arg("min").toInt();
+    if (minutos > 0) {
+      duracionBronceado = minutos * 60 * 1000;
+      duracionTotal = duracionBronceado + 60000; // +1 minuto de enfriamiento
+      listoParaIniciar = true;
+      pantalla.clear();
+      pantalla.setCursor(0, 0);
+      pantalla.print("Listo para iniciar");
+      pantalla.setCursor(0, 1);
+      pantalla.print("Presione boton...");
+      Serial.print("Tiempo recibido desde la web: ");
+      Serial.print(minutos);
+      Serial.println(" minutos. Esperando botón...");
+    }
+  }
+  servidorWeb.send(200, "text/plain", "OK");
 }
