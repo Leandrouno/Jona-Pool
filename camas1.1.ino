@@ -82,6 +82,8 @@ void loop() {
         estaBronceando = true;
         digitalWrite(pinReleBronceado, HIGH);
         digitalWrite(pinReleEnfriado, HIGH);
+        Serial.println("Rele bronceado HIGH");
+        Serial.println("Rele enfriado HIGH");
         Serial.println("Bronceando iniciado.");
       }
 
@@ -89,6 +91,7 @@ void loop() {
         estaBronceando = false;
         estaEnfriando = true;
         digitalWrite(pinReleBronceado, LOW);
+        Serial.println("Rele bronceado LOW");
         Serial.println("Bronceo terminado. Enfriando...");
       }
 
@@ -96,6 +99,7 @@ void loop() {
         estaEnProceso = false;
         estaEnfriando = false;
         digitalWrite(pinReleEnfriado, LOW);
+        Serial.println("Rele enfriada LOW");
         digitalWrite(pinBuzzer, LOW);
         pantalla.clear();
         pantalla.setCursor(0, 0);
@@ -172,6 +176,8 @@ void manejarDetener() {
     tiempoInicio = millis() - (duracionTotal - 60000);
     digitalWrite(pinReleBronceado, LOW);
     digitalWrite(pinReleEnfriado, HIGH);
+    Serial.println("Rele bronceado LOW");
+    Serial.println("Rele enfriado HIGH");
   }
   servidorWeb.send(200, "text/plain", "Proceso detenido");
 }
@@ -221,6 +227,7 @@ void manejarRaiz() {
   <div id="contenido" class="oculto">
     <h1>Control de Camas</h1>
     <p id="estado">Cargando...</p>
+    <button class="btn" onclick="iniciar(1)">1 Min</button>
     <button class="btn" onclick="iniciar(10)">10 Min</button>
     <button class="btn" onclick="iniciar(15)">15 Min</button>
     <button class="btn" onclick="iniciar(20)">20 Min</button>
